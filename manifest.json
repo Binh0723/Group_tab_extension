@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "AI Tab Grouper",
+  "version": "1.0.0",
+  "description": "Groups your tabs by topic using an OpenAI-compatible LLM API. Only tab titles and domains are sent.",
+  "permissions": ["tabs", "tabGroups", "storage"],
+  "host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AI Tab Grouper"
+  }
+}

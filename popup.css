@@ -1,0 +1,262 @@
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --muted: #6b6b6b;
+  --line: #0a0a0a;
+  --soft: #f4f4f4;
+  --ok: #0a0a0a;
+  --err: #0a0a0a;
+  --accent: #0a0a0a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 360px;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco,
+    "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- tabs ---------- */
+.brand {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+}
+
+.brand-dot {
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 8px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--fg);
+}
+
+.tab.active {
+  color: var(--fg);
+  border-bottom-color: var(--line);
+}
+
+/* ---------- panels ---------- */
+.panel {
+  padding: 14px;
+}
+
+/* ---------- form ---------- */
+label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+
+label:first-child {
+  margin-top: 0;
+}
+
+input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+input::placeholder {
+  color: #b5b5b5;
+}
+
+.hint {
+  font-size: 10px;
+  color: var(--muted);
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+/* ---------- buttons ---------- */
+button {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+button:hover:not(:disabled) {
+  background: #fff;
+  color: var(--fg);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+button.secondary {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button.secondary:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+}
+
+.model-row {
+  display: flex;
+  gap: 8px;
+}
+
+.model-row input {
+  flex: 1;
+}
+
+.model-row button {
+  padding: 8px 12px;
+}
+
+.actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 8px;
+}
+
+#group-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 11px;
+}
+
+/* ---------- warning ---------- */
+.warning {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  font-size: 11px;
+}
+
+.warning a {
+  color: var(--fg);
+  text-decoration: underline;
+}
+
+/* ---------- status ---------- */
+.status {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  font-size: 11px;
+  background: var(--soft);
+}
+
+.status.success {
+  border-left-color: var(--fg);
+}
+
+.status.error {
+  border-left-color: var(--fg);
+  word-break: break-word;
+}
+
+/* ---------- group list ---------- */
+.group-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  border: 1px solid var(--line);
+}
+
+.group-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.group-list li:last-child {
+  border-bottom: none;
+}
+
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 8px;
+  border: 1px solid var(--line);
+}
+
+/* ---------- privacy / footer ---------- */
+.privacy {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.footer {
+  margin-top: 12px;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.hidden {
+  display: none;
+}

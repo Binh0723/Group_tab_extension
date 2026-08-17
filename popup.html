@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="brand">AI_TAB_GROUPER<span class="brand-dot">_</span></div>
+  <div class="tabs">
+    <button class="tab active" data-tab="action">Action</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </div>
+
+  <section id="action" class="panel">
+    <div id="key-warning" class="warning hidden">
+      No API key set. <a href="#" id="warning-link">Open Settings</a> to add one.
+    </div>
+    <button id="group-btn">Group My Tabs</button>
+    <div id="action-status" class="status hidden"></div>
+    <ul id="group-list" class="group-list hidden"></ul>
+    <div class="footer">Tab titles, domains &amp; URL paths (no query strings) are sent to the LLM.</div>
+  </section>
+
+  <section id="settings" class="panel hidden">
+    <label for="apiKey">API Key</label>
+    <input type="password" id="apiKey" placeholder="sk-..." autocomplete="off" />
+
+    <label for="baseUrl">Base URL (OpenAI-compatible)</label>
+    <input type="text" id="baseUrl" placeholder="https://api.openai.com/v1" />
+    <p class="hint">Also works with OpenRouter, NVIDIA NIM, or local Ollama.</p>
+
+    <label for="model">Model</label>
+    <div class="model-row">
+      <input type="text" id="model" list="models-list" placeholder="gpt-4o-mini" autocomplete="off" />
+      <button id="load-models-btn" class="secondary" title="Fetch available models using your key">Load</button>
+    </div>
+    <datalist id="models-list"></datalist>
+    <p class="hint">Paste your API key, click <strong>Load</strong> to list models — or type any model name.</p>
+
+    <div class="actions">
+      <button id="save-btn">Save</button>
+      <button id="test-btn" class="secondary">Test Connection</button>
+    </div>
+    <div id="settings-status" class="status hidden"></div>
+
+    <p class="privacy">
+      Your key is stored locally in <code>chrome.storage.local</code> and only sent to the base URL above.
+      When grouping, tab titles, domains, and URL paths are sent — query strings and fragments are stripped.
+    </p>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>
