@@ -1,0 +1,14 @@
+{
+  "name": "ai-tab-grouper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Groups your tabs by topic using an OpenAI-compatible LLM API.",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/chrome": "^0.0.270"
+  }
+}
