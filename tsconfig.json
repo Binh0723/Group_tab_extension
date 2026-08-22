@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["chrome"]
   },
-  "include": ["background.ts"]
+  "include": ["background.ts", "popup.ts"]
 }

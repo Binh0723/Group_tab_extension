@@ -8,6 +8,7 @@
   <div class="brand">AI_TAB_GROUPER<span class="brand-dot">_</span></div>
   <div class="tabs">
     <button class="tab active" data-tab="action">Action</button>
+    <button class="tab" data-tab="chat">Chat</button>
     <button class="tab" data-tab="settings">Settings</button>
   </div>
 
@@ -19,6 +20,28 @@
     <div id="action-status" class="status hidden"></div>
     <ul id="group-list" class="group-list hidden"></ul>
     <div class="footer">Tab titles, domains &amp; URL paths (no query strings) are sent to the LLM.</div>
+  </section>
+
+  <section id="chat" class="panel hidden">
+    <div id="chat-key-warning" class="warning hidden">
+      No API key set. <a href="#" id="chat-warning-link">Open Settings</a> to add one.
+    </div>
+    <div id="chat-messages" class="chat-messages">
+      <div class="chat-empty">Start chatting with the AI. Messages are kept in memory only — closing the panel clears them.</div>
+    </div>
+    <div id="chat-status" class="status hidden"></div>
+    <div id="chat-context-tray" class="chat-context-tray hidden"></div>
+    <div class="chat-input-row">
+      <div class="chat-composer">
+        <button id="chat-context-btn" class="chat-icon-btn" title="Add tab as context" aria-label="Add tab as context">+</button>
+        <textarea id="chat-input" rows="2" placeholder="Ask anything... (Enter to send, Shift+Enter for newline)"></textarea>
+        <div id="chat-context-menu" class="chat-context-menu hidden">
+          <input id="chat-context-search" type="text" placeholder="Search tabs..." autocomplete="off" />
+          <ul id="chat-context-list"></ul>
+        </div>
+      </div>
+      <button id="chat-send-btn">Send</button>
+    </div>
   </section>
 
   <section id="settings" class="panel hidden">
