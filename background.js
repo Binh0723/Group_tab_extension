@@ -1,16 +1,11 @@
-"use strict";
 // AI Tab Grouper — background service worker (TypeScript)
 // Compiled to background.js by `npm run build` (tsc).
+// Loaded as an ES module so it can share code with the UI (see manifest.json).
+import { normalizeTab } from "./shared/domain.js";
 const COLORS = [
     "grey", "blue", "red", "yellow", "green",
     "pink", "purple", "cyan", "orange"
 ];
-const TWO_PART_TLDS = new Set([
-    "co.uk", "org.uk", "ac.uk", "gov.uk",
-    "com.au", "net.au", "org.au",
-    "co.jp", "or.jp", "ne.jp",
-    "com.br", "co.nz", "co.in", "co.za"
-]);
 const MAX_GROUPS = 8;
 const BATCH_SIZE = 40;
 const DEFAULTS = {
@@ -21,36 +16,6 @@ const DEFAULTS = {
 async function getSettings() {
     const stored = await chrome.storage.local.get(["apiKey", "baseUrl", "model"]);
     return { ...DEFAULTS, ...stored };
-}
-/** Reduce a hostname to its registrable domain (e.g. www.mail.google.com → google.com). */
-function registrableDomain(hostname) {
-    const labels = hostname.toLowerCase().replace(/^www\./, "").split(".");
-    if (labels.length <= 2)
-        return labels.join(".");
-    const lastTwo = labels.slice(-2).join(".");
-    if (TWO_PART_TLDS.has(lastTwo))
-        return labels.slice(-3).join(".");
-    return lastTwo;
-}
-/** Extract a minimal, privacy-safe descriptor from a Chrome tab. Returns null for non-http(s) tabs. */
-function extractTabInfo(tab) {
-    if (!tab.url)
-        return null;
-    try {
-        const url = new URL(tab.url);
-        if (url.protocol !== "http:" && url.protocol !== "https:")
-            return null;
-        const base = `${url.origin}${url.pathname}`;
-        return {
-            id: tab.id,
-            title: (tab.title || "").slice(0, 120),
-            domain: registrableDomain(url.hostname),
-            url: base.slice(0, 200)
-        };
-    }
-    catch {
-        return null;
-    }
 }
 const PROMPT = `You are an expert browser tab organizer. Your task is to categorize a JSON list of open browser tabs into logical groups. Each tab contains an id, page title, domain, and url (origin + path only; query strings and fragments are stripped).
 
@@ -124,7 +89,7 @@ async function groupTabs() {
         throw new Error("No API key set. Open Settings and add your key first.");
     }
     const allTabs = await chrome.tabs.query({ currentWindow: true });
-    const tabs = allTabs.map(extractTabInfo).filter((t) => t !== null);
+    const tabs = allTabs.map(normalizeTab).filter((t) => t !== null);
     if (tabs.length === 0) {
         return { groups: [], tabCount: 0, message: "No groupable tabs in this window." };
     }
