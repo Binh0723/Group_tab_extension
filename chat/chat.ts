@@ -4,7 +4,13 @@ import { $, escapeHtml } from "../shared/dom.js";
 import { switchTab } from "../shared/nav.js";
 import type { ChatMessage, ExtensionSettings } from "../shared/types.js";
 import { loadStoredSettings } from "../settings.js";
-import { initContextTray, restorePinnedContext, takePinnedContext } from "./tray.js";
+import { initContextTray, getPinnedContext, refreshPinnedTabs } from "./tray.js";
+import {
+  buildContextBlock,
+  fetchPageContents,
+  listTargetMetadata,
+  resolveTargets
+} from "./pageContext.js";
 import { readSseStream } from "./stream.js";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
@@ -19,7 +25,11 @@ const chatKeyWarning = $<HTMLElement>("chat-key-warning");
 
 // In-memory conversation only — not persisted. Cleared when panel closes.
 const chatHistory: ChatMessage[] = [
-  { role: "system", content: "You are a helpful, concise assistant." }
+  {
+    role: "system",
+    content:
+      "You are a helpful, concise assistant. Messages may include a 'Context' section describing the browser tab(s) the user is viewing, often with extracted page content. Use that context to answer questions like 'what is this?' — prefer it over guessing."
+  }
 ];
 let chatBusy = false;
 
@@ -85,14 +95,35 @@ async function sendChat(): Promise<void> {
   chatInputEl.value = "";
   chatInputEl.style.height = "";
 
-  // Build the outgoing user message, prepending any pinned tab context.
-  const sentContext = takePinnedContext();
+  // Build the outgoing user message. Pinned tabs (or the current tab when
+  // nothing is pinned) are scraped via Firecrawl so the model sees real page
+  // content; falls back to title/domain/url metadata if scraping is
+  // unavailable or no Firecrawl key is configured.
+  // Sync pins with the live tab state first (covers navigations that happened
+  // while the panel was closed or before listeners were attached), then
+  // snapshot. Pinned tabs (or the current tab when nothing is pinned) are
+  // scraped via Firecrawl so the model sees real page content; falls back to
+  // title/domain/url metadata if scraping is unavailable or no Firecrawl key
+  // is configured.
+  await refreshPinnedTabs().catch(() => {});
+  const sentContext = getPinnedContext();
   let userContent = text;
-  if (sentContext.length > 0) {
-    const ctx = sentContext
-      .map((t) => `- [${t.title}] (${t.domain}) ${t.url}`)
-      .join("\n");
-    userContent = `Context — open tabs the user pinned:\n${ctx}\n\n${text}`;
+  try {
+    const targets = await resolveTargets(sentContext);
+    if (targets.length > 0) {
+      setChatStatus("Reading page...", true);
+      const results = settings.firecrawlApiKey
+        ? await fetchPageContents(targets, settings)
+        : [];
+      const ctx =
+        results.length > 0 ? buildContextBlock(results) : listTargetMetadata(targets);
+      userContent = `Context — browser tab(s) the user is viewing:\n${ctx}\n\n${text}`;
+    }
+  } catch {
+    userContent =
+      sentContext.length > 0
+        ? `Context — open tabs the user pinned:\n${listTargetMetadata(sentContext)}\n\n${text}`
+        : text;
   }
 
   chatHistory.push({ role: "user", content: userContent });
@@ -164,8 +195,6 @@ async function sendChat(): Promise<void> {
     setChatStatus(null);
     // Roll back the user message so retries don't double-send context.
     chatHistory.pop();
-    // Restore the pinned context so the user can retry without re-adding tabs.
-    restorePinnedContext(sentContext);
   } finally {
     chatBusy = false;
     chatSendBtn.disabled = false;

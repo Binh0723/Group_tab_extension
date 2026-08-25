@@ -50,6 +50,14 @@
     <datalist id="models-list"></datalist>
     <p class="hint">Paste your API key, click <strong>Load</strong> to list models — or type any model name.</p>
 
+    <label for="firecrawlApiKey">Firecrawl API Key (optional)</label>
+    <input type="password" id="firecrawlApiKey" placeholder="fc-..." autocomplete="off" />
+    <p class="hint">Lets the chat read page content of the pinned/current tab ("what is this?"). Get a free key at firecrawl.dev.</p>
+
+    <label for="firecrawlBaseUrl">Firecrawl Base URL</label>
+    <input type="text" id="firecrawlBaseUrl" placeholder="https://api.firecrawl.dev" />
+    <p class="hint">Point at a self-hosted Firecrawl instance to keep scraping traffic local.</p>
+
     <div class="actions">
       <button id="save-btn">Save</button>
       <button id="test-btn" class="secondary">Test Connection</button>
@@ -57,8 +65,10 @@
     <div id="settings-status" class="status hidden"></div>
 
     <p class="privacy">
-      Your key is stored locally in <code>chrome.storage.local</code> and only sent to the base URL above.
+      Your keys are stored locally in <code>chrome.storage.local</code> and only sent to the base URLs above.
       When grouping, tab titles, domains, and URL paths are sent — query strings and fragments are stripped.
+      When a Firecrawl key is set, chat sends the pinned (or current) tab's full URL — plus that site's cookies,
+      so logged-in pages can be read — to your configured Firecrawl endpoint. Scrapes are never stored in Firecrawl's cache.
     </p>
   </section>
 

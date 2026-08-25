@@ -2,9 +2,19 @@
 import { $, showStatus } from "./shared/dom.js";
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
+const DEFAULT_FIRECRAWL_BASE_URL = "https://api.firecrawl.dev";
+const SETTING_KEYS = [
+    "apiKey",
+    "baseUrl",
+    "model",
+    "firecrawlApiKey",
+    "firecrawlBaseUrl"
+];
 const apiKeyEl = $("apiKey");
 const baseUrlEl = $("baseUrl");
 const modelEl = $("model");
+const firecrawlApiKeyEl = $("firecrawlApiKey");
+const firecrawlBaseUrlEl = $("firecrawlBaseUrl");
 const modelsList = $("models-list");
 const saveBtn = $("save-btn");
 const testBtn = $("test-btn");
@@ -60,13 +70,15 @@ async function loadModels() {
 }
 /** Read stored settings without touching the form. Used by chat and the grouper UI. */
 export async function loadStoredSettings() {
-    return (await chrome.storage.local.get(["apiKey", "baseUrl", "model"]));
+    return (await chrome.storage.local.get([...SETTING_KEYS]));
 }
 async function loadSettingsIntoForm() {
-    const { apiKey, baseUrl, model } = await loadStoredSettings();
+    const { apiKey, baseUrl, model, firecrawlApiKey, firecrawlBaseUrl } = await loadStoredSettings();
     apiKeyEl.value = apiKey || "";
     baseUrlEl.value = baseUrl || DEFAULT_BASE_URL;
     modelEl.value = model || DEFAULT_MODEL;
+    firecrawlApiKeyEl.value = firecrawlApiKey || "";
+    firecrawlBaseUrlEl.value = firecrawlBaseUrl || DEFAULT_FIRECRAWL_BASE_URL;
     if (apiKey)
         loadModels();
 }
@@ -90,7 +102,22 @@ export function initSettings() {
             showStatus(settingsStatusEl, "Base URL is not a valid URL.", false);
             return;
         }
-        await chrome.storage.local.set({ apiKey, baseUrl, model });
+        const firecrawlApiKey = firecrawlApiKeyEl.value.trim();
+        const firecrawlBaseUrl = firecrawlBaseUrlEl.value.trim() || DEFAULT_FIRECRAWL_BASE_URL;
+        try {
+            new URL(firecrawlBaseUrl);
+        }
+        catch {
+            showStatus(settingsStatusEl, "Firecrawl Base URL is not a valid URL.", false);
+            return;
+        }
+        await chrome.storage.local.set({
+            apiKey,
+            baseUrl,
+            model,
+            firecrawlApiKey,
+            firecrawlBaseUrl
+        });
         showStatus(settingsStatusEl, "Settings saved.", true);
     });
     testBtn.addEventListener("click", async () => {

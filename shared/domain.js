@@ -32,6 +32,7 @@ export function normalizeTab(tab) {
             title: (tab.title || url.hostname || "Untitled").slice(0, TITLE_MAX_LENGTH),
             domain: registrableDomain(url.hostname),
             url: `${url.origin}${url.pathname}`.slice(0, URL_MAX_LENGTH),
+            fullUrl: tab.url,
             favIconUrl: tab.favIconUrl
         };
     }

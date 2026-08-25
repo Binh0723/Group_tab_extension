@@ -6,8 +6,9 @@ const chatContextMenu = $("chat-context-menu");
 const chatContextSearch = $("chat-context-search");
 const chatContextList = $("chat-context-list");
 const chatContextTray = $("chat-context-tray");
-// Pinned tab contexts for the next send. Each entry is privacy-safe:
-// title, domain, and origin+path (query strings/fragments stripped).
+// Pinned tab contexts. Each entry is privacy-safe: title, domain, and
+// origin+path (query strings/fragments stripped). Pins persist across sends
+// until the user removes them via the chip's × button.
 const pinnedContext = [];
 const removedContextIds = new Set();
 let contextMenuOpen = false;
@@ -129,20 +130,57 @@ function closeContextMenu() {
     chatContextMenu.classList.add("hidden");
     chatContextBtn.classList.remove("active");
 }
-/** Snapshot the pins for sending and clear the tray. */
-export function takePinnedContext() {
-    const taken = pinnedContext.slice();
-    pinnedContext.length = 0;
-    renderContextTray();
-    return taken;
+/** Snapshot the current pins without clearing them — pins persist until removed. */
+export function getPinnedContext() {
+    return pinnedContext.slice();
 }
-/** Put pins back (e.g. after a failed send so the user can retry). */
-export function restorePinnedContext(tabs) {
-    pinnedContext.push(...tabs);
+/**
+ * Re-read every pinned tab's live state (title/url move together when the user
+ * navigates inside a pinned tab). Pins whose tab closed or left the web are
+ * dropped; everything else is updated in place.
+ */
+export async function refreshPinnedTabs() {
+    if (pinnedContext.length === 0)
+        return;
+    const states = await Promise.all(pinnedContext.map((pin) => chrome.tabs.get(pin.id).catch(() => null)));
+    let changed = false;
+    const next = [];
+    pinnedContext.forEach((pin, i) => {
+        const tab = states[i];
+        const fresh = tab ? normalizeTab(tab) : null;
+        if (!fresh) {
+            changed = true; // tab closed or navigated to a non-web page
+            return;
+        }
+        if (fresh.url !== pin.url ||
+            fresh.title !== pin.title ||
+            fresh.fullUrl !== pin.fullUrl) {
+            changed = true;
+        }
+        next.push(fresh);
+    });
+    if (!changed)
+        return;
+    pinnedContext.length = 0;
+    pinnedContext.push(...next);
     renderContextTray();
 }
 export function initContextTray(onFocusComposer) {
     focusComposer = onFocusComposer;
+    // Keep pinned chips in sync while the user navigates inside pinned tabs
+    // or closes them. Only url/title changes matter for our descriptors.
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+        if (!(changeInfo.url || changeInfo.title))
+            return;
+        if (!isPinned(tabId))
+            return;
+        void refreshPinnedTabs();
+    });
+    chrome.tabs.onRemoved.addListener((tabId) => {
+        if (!isPinned(tabId))
+            return;
+        void refreshPinnedTabs();
+    });
     chatContextBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
         if (contextMenuOpen)

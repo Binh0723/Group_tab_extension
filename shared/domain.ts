@@ -18,6 +18,8 @@ export interface TabDescriptor {
   title: string;
   domain: string;
   url: string;
+  /** Full URL including query/fragment. Only used where fetching requires it (page scraping). */
+  fullUrl?: string;
   favIconUrl?: string;
 }
 
@@ -41,6 +43,7 @@ export function normalizeTab(tab: chrome.tabs.Tab): TabDescriptor | null {
       title: (tab.title || url.hostname || "Untitled").slice(0, TITLE_MAX_LENGTH),
       domain: registrableDomain(url.hostname),
       url: `${url.origin}${url.pathname}`.slice(0, URL_MAX_LENGTH),
+      fullUrl: tab.url,
       favIconUrl: tab.favIconUrl
     };
   } catch {
