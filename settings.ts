@@ -5,21 +5,15 @@ import type { ExtensionSettings } from "./shared/types.js";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
-const DEFAULT_FIRECRAWL_BASE_URL = "https://api.firecrawl.dev";
 
-const SETTING_KEYS = [
-  "apiKey",
-  "baseUrl",
-  "model",
-  "firecrawlApiKey",
-  "firecrawlBaseUrl"
-] as const;
+const SETTING_KEYS = ["apiKey", "baseUrl", "model"] as const;
+
+// Removed feature: Firecrawl-based scraping. Purge any previously stored keys.
+void chrome.storage.local.remove(["firecrawlApiKey", "firecrawlBaseUrl"]);
 
 const apiKeyEl = $<HTMLInputElement>("apiKey");
 const baseUrlEl = $<HTMLInputElement>("baseUrl");
 const modelEl = $<HTMLInputElement>("model");
-const firecrawlApiKeyEl = $<HTMLInputElement>("firecrawlApiKey");
-const firecrawlBaseUrlEl = $<HTMLInputElement>("firecrawlBaseUrl");
 const modelsList = $<HTMLDataListElement>("models-list");
 const saveBtn = $<HTMLButtonElement>("save-btn");
 const testBtn = $<HTMLButtonElement>("test-btn");
@@ -79,13 +73,10 @@ export async function loadStoredSettings(): Promise<ExtensionSettings> {
 }
 
 async function loadSettingsIntoForm(): Promise<void> {
-  const { apiKey, baseUrl, model, firecrawlApiKey, firecrawlBaseUrl } =
-    await loadStoredSettings();
+  const { apiKey, baseUrl, model } = await loadStoredSettings();
   apiKeyEl.value = apiKey || "";
   baseUrlEl.value = baseUrl || DEFAULT_BASE_URL;
   modelEl.value = model || DEFAULT_MODEL;
-  firecrawlApiKeyEl.value = firecrawlApiKey || "";
-  firecrawlBaseUrlEl.value = firecrawlBaseUrl || DEFAULT_FIRECRAWL_BASE_URL;
   if (apiKey) loadModels();
 }
 
@@ -108,21 +99,7 @@ export function initSettings(): void {
       showStatus(settingsStatusEl, "Base URL is not a valid URL.", false);
       return;
     }
-    const firecrawlApiKey = firecrawlApiKeyEl.value.trim();
-    const firecrawlBaseUrl = firecrawlBaseUrlEl.value.trim() || DEFAULT_FIRECRAWL_BASE_URL;
-    try {
-      new URL(firecrawlBaseUrl);
-    } catch {
-      showStatus(settingsStatusEl, "Firecrawl Base URL is not a valid URL.", false);
-      return;
-    }
-    await chrome.storage.local.set({
-      apiKey,
-      baseUrl,
-      model,
-      firecrawlApiKey,
-      firecrawlBaseUrl
-    });
+    await chrome.storage.local.set({ apiKey, baseUrl, model });
     showStatus(settingsStatusEl, "Settings saved.", true);
   });
 

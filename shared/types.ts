@@ -5,8 +5,6 @@ export interface ExtensionSettings {
   apiKey?: string;
   baseUrl?: string;
   model?: string;
-  firecrawlApiKey?: string;
-  firecrawlBaseUrl?: string;
 }
 
 /** One entry in the in-memory chat transcript. */

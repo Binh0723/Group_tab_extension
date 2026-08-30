@@ -3,6 +3,7 @@
 // Loaded as an ES module so it can share code with the UI (see manifest.json).
 
 import { normalizeTab, type TabDescriptor } from "./shared/domain.js";
+import { extractPageContent, type PageContent } from "./shared/pageContent.js";
 
 const COLORS = [
   "grey", "blue", "red", "yellow", "green",
@@ -176,6 +177,16 @@ async function groupTabs(): Promise<GroupResult> {
   return { groups: created, tabCount: tabs.length };
 }
 
+/** Inject the extractor into a tab and return its page content. */
+async function scrapeTab(tabId: number): Promise<PageContent> {
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: extractPageContent
+  });
+  if (!result || result.result == null) throw new Error("No result from page");
+  return result.result as PageContent;
+}
+
 // Open the side panel when the toolbar icon is clicked.
 // Guard in case the sidePanel API isn't available (older Chrome or permission not yet loaded).
 if (chrome.sidePanel?.setPanelBehavior) {
@@ -186,12 +197,25 @@ if (chrome.sidePanel?.setPanelBehavior) {
 
 chrome.runtime.onMessage.addListener(
   (msg: unknown, _sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void) => {
-    if (typeof msg !== "object" || msg === null || (msg as { type?: string }).type !== "GROUP_TABS") {
-      return false;
+    if (typeof msg !== "object" || msg === null) return false;
+    const type = (msg as { type?: string }).type;
+    if (type === "GROUP_TABS") {
+      groupTabs()
+        .then((result) => sendResponse({ ok: true, ...result }))
+        .catch((err: Error) => sendResponse({ ok: false, error: err.message }));
+      return true; // keep the sendResponse channel open across the async call
     }
-    groupTabs()
-      .then((result) => sendResponse({ ok: true, ...result }))
-      .catch((err: Error) => sendResponse({ ok: false, error: err.message }));
-    return true; // keep the sendResponse channel open across the async call
+    if (type === "SCRAPE_TAB") {
+      const tabId = (msg as { tabId?: unknown }).tabId;
+      if (typeof tabId !== "number") {
+        sendResponse({ ok: false, error: "SCRAPE_TAB requires a numeric tabId" });
+        return false;
+      }
+      scrapeTab(tabId)
+        .then((content) => sendResponse({ ok: true, content }))
+        .catch((err: Error) => sendResponse({ ok: false, error: err.message }));
+      return true; // keep the sendResponse channel open across the async call
+    }
+    return false;
   }
 );

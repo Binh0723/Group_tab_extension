@@ -18,7 +18,7 @@ export interface TabDescriptor {
   title: string;
   domain: string;
   url: string;
-  /** Full URL including query/fragment. Only used where fetching requires it (page scraping). */
+  /** Full URL including query/fragment. Used to detect navigation inside pinned tabs. */
   fullUrl?: string;
   favIconUrl?: string;
 }
