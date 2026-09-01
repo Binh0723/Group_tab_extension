@@ -22,10 +22,18 @@
       <div class="chat-composer">
         <div id="chat-context-tray" class="chat-context-tray hidden"></div>
         <div class="chat-input-wrap">
-          <button id="chat-context-btn" class="chat-icon-btn" title="Add tab as context" aria-label="Add tab as context">+</button>
+          <button id="chat-context-btn" class="chat-icon-btn" type="button" title="Add tab as context" aria-label="Add tab as context">+</button>
           <textarea id="chat-input" rows="5" placeholder="Ask anything... (Enter to send, Shift+Enter for newline)"></textarea>
-          <button id="chat-send-btn" title="Send" aria-label="Send">↑</button>
+          <button id="chat-upload-btn" class="chat-icon-btn" type="button" title="Attach images or text files" aria-label="Attach images or text files">📎</button>
+          <button id="chat-send-btn" type="button" title="Send" aria-label="Send">↑</button>
         </div>
+        <input
+          id="chat-file-input"
+          type="file"
+          multiple
+          accept="image/png,image/jpeg,image/webp,image/gif,text/*,.txt,.md,.markdown,.csv,.json,.xml,.html,.htm,.css,.js,.jsx,.ts,.tsx,.yaml,.yml,.log"
+          hidden
+        />
         <div id="chat-context-menu" class="chat-context-menu hidden">
           <input id="chat-context-search" type="text" placeholder="Search tabs..." autocomplete="off" />
           <ul id="chat-context-list"></ul>
@@ -60,7 +68,8 @@
       Your key is stored locally in <code>chrome.storage.local</code> and only sent to the base URL above.
       When grouping, tab titles, domains, and URL paths are sent — query strings and fragments are stripped.
       When you pin tabs in chat (or ask about the current tab), the page's content is read locally in your
-      browser and included with your message — nothing is sent to any third-party scraping service.
+      browser and included with your message — nothing is sent to any third-party scraping or file service.
+      Images and text files selected with the paperclip button are kept in memory and sent only when you send a chat message.
     </p>
   </section>
 

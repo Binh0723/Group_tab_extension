@@ -1,7 +1,8 @@
-// Pinned-tab context state + the context tray UI (chips) + the tab picker menu.
+// Tab/file context state + the context tray UI (chips) + the tab picker menu.
 
 import { $ } from "../shared/dom.js";
 import { normalizeTab, type TabDescriptor } from "../shared/domain.js";
+import type { ChatAttachment } from "../shared/types.js";
 
 const chatContextBtn = $<HTMLButtonElement>("chat-context-btn");
 const chatContextMenu = $<HTMLElement>("chat-context-menu");
@@ -13,6 +14,7 @@ const chatContextTray = $<HTMLElement>("chat-context-tray");
 // origin+path (query strings/fragments stripped). Pins persist across sends
 // until the user removes them via the chip's × button.
 const pinnedContext: TabDescriptor[] = [];
+const pendingAttachments: ChatAttachment[] = [];
 const removedContextIds = new Set<number>();
 let contextMenuOpen = false;
 let allContextTabs: TabDescriptor[] = [];
@@ -23,11 +25,12 @@ let focusComposer: () => void = () => {};
 
 function renderContextTray(): void {
   chatContextTray.innerHTML = "";
-  if (pinnedContext.length === 0) {
+  if (pinnedContext.length === 0 && pendingAttachments.length === 0) {
     chatContextTray.classList.add("hidden");
     return;
   }
   chatContextTray.classList.remove("hidden");
+
   for (const tab of pinnedContext) {
     const chip = document.createElement("span");
     chip.className = "chat-chip";
@@ -42,6 +45,7 @@ function renderContextTray(): void {
     title.className = "chip-title";
     title.textContent = tab.title;
     const remove = document.createElement("button");
+    remove.type = "button";
     remove.className = "chip-remove";
     remove.textContent = "×";
     remove.title = "Remove context";
@@ -55,6 +59,70 @@ function renderContextTray(): void {
     chip.appendChild(remove);
     chatContextTray.appendChild(chip);
   }
+
+  for (const attachment of pendingAttachments) {
+    const chip = document.createElement("span");
+    chip.className = "chat-chip attachment-chip";
+    chip.title = attachment.name;
+
+    if (attachment.kind === "image" && attachment.dataUrl) {
+      const img = document.createElement("img");
+      img.className = "attachment-thumb";
+      img.src = attachment.dataUrl;
+      img.alt = attachment.name;
+      img.onerror = () => img.remove();
+      chip.appendChild(img);
+    } else {
+      const icon = document.createElement("span");
+      icon.className = "attachment-icon";
+      icon.textContent = "▤";
+      icon.setAttribute("aria-hidden", "true");
+      chip.appendChild(icon);
+    }
+
+    const title = document.createElement("span");
+    title.className = "chip-title";
+    title.textContent = attachment.name;
+    chip.appendChild(title);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "chip-remove";
+    remove.textContent = "×";
+    remove.title = `Remove ${attachment.name}`;
+    remove.setAttribute("aria-label", `Remove ${attachment.name}`);
+    remove.addEventListener("click", () => {
+      const i = pendingAttachments.findIndex((item) => item.id === attachment.id);
+      if (i !== -1) pendingAttachments.splice(i, 1);
+      renderContextTray();
+    });
+    chip.appendChild(remove);
+    chatContextTray.appendChild(chip);
+  }
+}
+
+/** Snapshot the files waiting to be included in the next chat message. */
+export function getPendingAttachments(): ChatAttachment[] {
+  return pendingAttachments.slice();
+}
+
+/** Add successfully parsed files to the attachment tray. */
+export function addPendingAttachments(attachments: ChatAttachment[]): void {
+  pendingAttachments.push(...attachments);
+  renderContextTray();
+}
+
+/** Clear files after a successful send. */
+export function clearPendingAttachments(): void {
+  pendingAttachments.length = 0;
+  renderContextTray();
+}
+
+/** Restore a snapshot when a request fails so it can be retried. */
+export function restorePendingAttachments(attachments: ChatAttachment[]): void {
+  pendingAttachments.length = 0;
+  pendingAttachments.push(...attachments);
+  renderContextTray();
 }
 
 function isPinned(id: number): boolean {
