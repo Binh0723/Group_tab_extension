@@ -188,10 +188,8 @@ function isVisionUnsupportedError(err: unknown): boolean {
   );
 }
 
-async function handleFileSelection(): Promise<void> {
-  const files = Array.from(chatFileInput.files || []);
-  // Reset so selecting the same file again still fires a change event.
-  chatFileInput.value = "";
+/** Shared attachment pipeline: used by the file picker and by pasted images. */
+async function handleFiles(files: File[]): Promise<void> {
   if (files.length === 0 || chatBusy || attachmentBusy) return;
 
   const available = MAX_ATTACHMENTS - getPendingAttachments().length;
@@ -233,6 +231,24 @@ async function handleFileSelection(): Promise<void> {
     setChatStatus(null);
   }
   chatInputEl.focus();
+}
+
+async function handleFileSelection(): Promise<void> {
+  const files = Array.from(chatFileInput.files || []);
+  // Reset so selecting the same file again still fires a change event.
+  chatFileInput.value = "";
+  await handleFiles(files);
+}
+
+/** Accept pasted images (screenshots, copied images) and OS file copies. */
+function handlePaste(event: ClipboardEvent): void {
+  const files = Array.from(event.clipboardData?.items || [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((f): f is File => f !== null);
+  if (files.length === 0) return; // normal text paste proceeds untouched
+  event.preventDefault();
+  void handleFiles(files);
 }
 
 /** Pinned tabs (capped) if any; otherwise the active tab of the current window. */
@@ -384,6 +400,8 @@ export function initChat(): void {
   chatFileInput.addEventListener("change", () => {
     void handleFileSelection();
   });
+
+  chatInputEl.addEventListener("paste", handlePaste);
 
   chatInputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
