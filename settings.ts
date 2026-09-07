@@ -1,15 +1,10 @@
-// Settings panel: API key / base URL / model form, connection test, model listing.
+// Settings panel UI: API key / base URL / model form, connection test, model
+// listing. All API access goes through shared/llm.ts; storage through
+// shared/settings.ts.
 
 import { $, showStatus } from "./shared/dom.js";
-import type { ExtensionSettings } from "./shared/types.js";
-
-const DEFAULT_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_MODEL = "gpt-4o-mini";
-
-const SETTING_KEYS = ["apiKey", "baseUrl", "model"] as const;
-
-// Removed feature: Firecrawl-based scraping. Purge any previously stored keys.
-void chrome.storage.local.remove(["firecrawlApiKey", "firecrawlBaseUrl"]);
+import { loadStoredSettings, DEFAULT_BASE_URL, DEFAULT_MODEL } from "./shared/settings.js";
+import { listModels, testConnection, LlmHttpError } from "./shared/llm.js";
 
 const apiKeyEl = $<HTMLInputElement>("apiKey");
 const baseUrlEl = $<HTMLInputElement>("baseUrl");
@@ -20,36 +15,27 @@ const testBtn = $<HTMLButtonElement>("test-btn");
 const loadModelsBtn = $<HTMLButtonElement>("load-models-btn");
 const settingsStatusEl = $<HTMLElement>("settings-status");
 
+// Removed feature: Firecrawl-based scraping. Purge any previously stored keys.
+void chrome.storage.local.remove(["firecrawlApiKey", "firecrawlBaseUrl"]);
+
 function currentBaseUrl(): string {
   return (baseUrlEl.value.trim() || DEFAULT_BASE_URL).replace(/\/+$/, "");
 }
 
+function formConfig(): { apiKey: string; baseUrl: string } {
+  return { apiKey: apiKeyEl.value.trim(), baseUrl: currentBaseUrl() };
+}
+
 async function loadModels(): Promise<void> {
-  const apiKey = apiKeyEl.value.trim();
-  if (!apiKey) {
+  const config = formConfig();
+  if (!config.apiKey) {
     showStatus(settingsStatusEl, "Paste your API key first.", false);
     return;
   }
   loadModelsBtn.disabled = true;
   showStatus(settingsStatusEl, "Fetching models...", true);
   try {
-    const res = await fetch(`${currentBaseUrl()}/models`, {
-      headers: { Authorization: `Bearer ${apiKey}` }
-    });
-    if (!res.ok) {
-      showStatus(settingsStatusEl, `Failed to list models (${res.status}). Check key and base URL.`, false);
-      return;
-    }
-    const data = (await res.json()) as { data?: unknown[]; models?: unknown[] };
-    const items = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
-    const ids = items
-      .map((m): string | undefined => {
-        if (typeof m === "string") return m;
-        const obj = m as { id?: string; name?: string } | null;
-        return obj?.id || obj?.name;
-      })
-      .filter((s): s is string => Boolean(s))
-      .sort((a, b) => a.localeCompare(b));
+    const ids = await listModels(config);
     modelsList.innerHTML = "";
     for (const id of ids) {
       const opt = document.createElement("option");
@@ -65,11 +51,6 @@ async function loadModels(): Promise<void> {
     showStatus(settingsStatusEl, `Failed to list models: ${(err as Error).message}`, false);
   }
   loadModelsBtn.disabled = false;
-}
-
-/** Read stored settings without touching the form. Used by chat and the grouper UI. */
-export async function loadStoredSettings(): Promise<ExtensionSettings> {
-  return (await chrome.storage.local.get([...SETTING_KEYS])) as ExtensionSettings;
 }
 
 async function loadSettingsIntoForm(): Promise<void> {
@@ -104,22 +85,19 @@ export function initSettings(): void {
   });
 
   testBtn.addEventListener("click", async () => {
-    const apiKey = apiKeyEl.value.trim();
-    const baseUrl = currentBaseUrl();
-    if (!apiKey) {
+    const config = formConfig();
+    if (!config.apiKey) {
       showStatus(settingsStatusEl, "Enter API key first.", false);
       return;
     }
     testBtn.disabled = true;
     showStatus(settingsStatusEl, "Testing...", true);
     try {
-      const res = await fetch(`${baseUrl}/models`, {
-        headers: { Authorization: `Bearer ${apiKey}` }
-      });
-      if (res.ok) showStatus(settingsStatusEl, "Connection OK.", true);
-      else showStatus(settingsStatusEl, `Connection failed (${res.status}). Check key, URL, and model.`, false);
+      await testConnection(config);
+      showStatus(settingsStatusEl, "Connection OK.", true);
     } catch (err) {
-      showStatus(settingsStatusEl, `Connection failed: ${(err as Error).message}`, false);
+      const status = err instanceof LlmHttpError ? ` (${err.status})` : "";
+      showStatus(settingsStatusEl, `Connection failed${status}. Check key, URL, and model.`, false);
     }
     testBtn.disabled = false;
   });

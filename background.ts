@@ -4,34 +4,16 @@
 
 import { normalizeTab, type TabDescriptor } from "./shared/domain.js";
 import { extractPageContent, type PageContent } from "./shared/pageContent.js";
+import { loadStoredSettings } from "./shared/settings.js";
+import {
+  COLORS,
+  MAX_GROUPS,
+  requestGroups,
+  type ModelGroup,
+  type TabColor
+} from "./llm/tasks/groupTabs.js";
 
-const COLORS = [
-  "grey", "blue", "red", "yellow", "green",
-  "pink", "purple", "cyan", "orange"
-] as const;
-type TabColor = (typeof COLORS)[number];
-
-const MAX_GROUPS = 8;
 const BATCH_SIZE = 40;
-
-interface Settings {
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-}
-
-const DEFAULTS: Settings = {
-  apiKey: "",
-  baseUrl: "https://api.openai.com/v1",
-  model: "gpt-4o-mini"
-};
-
-/** Group as returned by the LLM. */
-interface ModelGroup {
-  name: string;
-  color?: string;
-  tabIds: number[];
-}
 
 /** Group summary returned to the UI. */
 interface CreatedGroup {
@@ -46,77 +28,6 @@ type GroupResult = {
   message?: string;
 };
 
-async function getSettings(): Promise<Settings> {
-  const stored = await chrome.storage.local.get(["apiKey", "baseUrl", "model"]);
-  return { ...DEFAULTS, ...stored };
-}
-
-const PROMPT = `You are an expert browser tab organizer. Your task is to categorize a JSON list of open browser tabs into logical groups. Each tab contains an id, page title, domain, and url (origin + path only; query strings and fragments are stripped).
-
-### Rules & Guidelines
-1. **Group Count:** Use **at most ${MAX_GROUPS}** groups. Merge small or niche topics into broader, sensible categories.
-2. **Domain & Path Separation:** 
-   - Separate tabs from the **same domain** into different groups if they represent distinct activities or workspaces (e.g., github.com/org-a vs. github.com/org-b, mail.google.com/mail vs. mail.google.com/chat).
-   - Keep tabs on the **same domain** together if paths represent different views or items within a single ongoing activity (e.g., multiple pages in the same Notion workspace or several PRs in the same repository).
-3. **Signal Combination:** Use **page titles** primarily for topic identification, and **URL paths** to disambiguate and separate tabs within the same domain.
-4. **Naming Convention:** Group names must be concise (**1–2 words**) and accurately reflect the purpose of the tabs.
-5. **Color Assignment:** Assign each group a distinct color chosen **only** from this exact list: ${COLORS.join(", ")}. Do not use any colors outside this list.
-6. **Completeness & Integrity:** 
-   - Every input tab id must appear **exactly once**. 
-   - Do not invent, omit, or duplicate any tab IDs.
-
-### Output Format
-Return **ONLY** valid raw JSON in the exact shape below. Do **not** wrap the output in markdown code blocks (e.g. no \`\`\`json), and do **not** include any extra text or explanation.
-
-{"groups":[{"name":"Group Name","color":"blue","tabIds":[1,2]}]}`;
-
-/** Defensively extract + validate the groups array from a raw model response. */
-function parseGroups(raw: string): ModelGroup[] {
-  let text = raw.trim();
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) text = fence[1].trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1) throw new Error("Model response contained no JSON object");
-  const parsed = JSON.parse(text.slice(start, end + 1)) as { groups?: unknown };
-  if (!parsed || !Array.isArray(parsed.groups)) throw new Error("Model response missing 'groups' array");
-  return parsed.groups as ModelGroup[];
-}
-
-/** Call an OpenAI-compatible /chat/completions endpoint with a batch of tabs. */
-async function callLLM(settings: Settings, tabs: TabDescriptor[]): Promise<ModelGroup[]> {
-  const body = {
-    model: settings.model,
-    temperature: 0,
-    response_format: { type: "json_object" as const },
-    messages: [
-      { role: "system" as const, content: PROMPT },
-      {
-        role: "user" as const,
-        content: JSON.stringify(tabs.map(({ id, title, domain, url }) => ({ id, title, domain, url })))
-      }
-    ]
-  };
-  const res = await fetch(`${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`API error ${res.status}: ${errText.slice(0, 300)}`);
-  }
-  const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Empty response from model");
-  return parseGroups(content);
-}
-
 interface MergedGroup {
   name: string;
   color: TabColor | null;
@@ -125,7 +36,7 @@ interface MergedGroup {
 
 /** Main orchestrator: query tabs, batch them through the LLM, and create Chrome tab groups. */
 async function groupTabs(): Promise<GroupResult> {
-  const settings = await getSettings();
+  const settings = await loadStoredSettings();
   if (!settings.apiKey) {
     throw new Error("No API key set. Open Settings and add your key first.");
   }
@@ -142,7 +53,7 @@ async function groupTabs(): Promise<GroupResult> {
   const groupsByName = new Map<string, MergedGroup>();
   for (let i = 0; i < tabs.length; i += BATCH_SIZE) {
     const batch = tabs.slice(i, i + BATCH_SIZE);
-    const modelGroups = await callLLM(settings, batch);
+    const modelGroups: ModelGroup[] = await requestGroups(batch);
     const validIds = new Set(batch.map((t) => t.id));
     for (const g of modelGroups) {
       if (!g || typeof g.name !== "string" || !Array.isArray(g.tabIds)) continue;

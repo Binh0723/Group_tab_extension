@@ -11,7 +11,8 @@ import type {
   ExtensionSettings
 } from "../shared/types.js";
 import type { PageContent } from "../shared/pageContent.js";
-import { loadStoredSettings } from "../settings.js";
+import { loadStoredSettings, DEFAULT_MODEL } from "../shared/settings.js";
+import { completeStream, LlmHttpError, type LlmMessage } from "../shared/llm.js";
 import {
   addPendingAttachments,
   clearPendingAttachments,
@@ -22,10 +23,8 @@ import {
   initContextTray
 } from "./tray.js";
 import { MAX_ATTACHMENTS, MAX_TEXT_CHARS, readAttachment } from "./attachments.js";
-import { readSseStream } from "./stream.js";
+import { getTabContent } from "./contextStore.js";
 
-const DEFAULT_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_MODEL = "gpt-4o-mini";
 const INPUT_MAX_HEIGHT_PX = 320;
 const MAX_CONTEXT_TARGETS = 3;
 
@@ -121,22 +120,6 @@ export function flashChatStatus(text: string, ms = 3000): void {
   }, ms);
 }
 
-interface ScrapeResponse {
-  ok: boolean;
-  content?: PageContent;
-  error?: string;
-}
-
-/** Ask the service worker to scrape a tab locally. Returns null on any failure. */
-async function scrapeTabContent(tabId: number): Promise<PageContent | null> {
-  try {
-    const res = (await chrome.runtime.sendMessage({ type: "SCRAPE_TAB", tabId })) as ScrapeResponse;
-    return res && res.ok && res.content ? res.content : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Format one target tab as LLM context, with page content when scraping succeeded. */
 function formatTabContext(tab: TabDescriptor, page: PageContent | null): string {
   const lines: string[] = [`### ${tab.title} (${tab.domain})\n${tab.url}`];
@@ -196,47 +179,9 @@ function hasImages(attachments: ChatAttachment[]): boolean {
   return attachments.some((attachment) => attachment.kind === "image");
 }
 
-class ChatHttpError extends Error {
-  constructor(readonly status: number, readonly responseText: string) {
-    const detail = responseText ? `: ${responseText.slice(0, 200)}` : "";
-    super(`HTTP ${status}${detail}`);
-    this.name = "ChatHttpError";
-  }
-}
-
-/** Send the current chat history to the configured OpenAI-compatible endpoint. */
-async function requestChatCompletion(
-  settings: ExtensionSettings,
-  model: string
-): Promise<Response> {
-  const baseUrl = (settings.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      messages: chatHistory.map((message) => ({
-        role: message.role,
-        content: message.content
-      })),
-      stream: true
-    })
-  });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new ChatHttpError(res.status, errText);
-  }
-  if (!res.body) throw new Error("No response stream");
-  return res;
-}
-
 /** There is no portable vision-capability endpoint, so identify common API errors. */
 function isVisionUnsupportedError(err: unknown): boolean {
-  if (!(err instanceof ChatHttpError)) return false;
+  if (!(err instanceof LlmHttpError)) return false;
   if (err.status === 400 || err.status === 422) return true;
   return /(image|vision|multimodal|image_url|content.*(array|part|type)|\bunsupported\b|not support)/i.test(
     err.responseText
@@ -342,7 +287,7 @@ async function sendChat(): Promise<void> {
     const targets = await resolveTargets(sentContext);
     let tabContext = "";
     if (targets.length > 0) {
-      const scraped = await Promise.all(targets.map((t) => scrapeTabContent(t.id)));
+      const scraped = await Promise.all(targets.map((t) => getTabContent(t)));
       tabContext = targets.map((t, i) => formatTabContext(t, scraped[i])).join("\n\n");
     }
 
@@ -360,10 +305,29 @@ async function sendChat(): Promise<void> {
     replyBody = assistantBody;
     cursor = cursorElement;
 
-    const model = settings.model || DEFAULT_MODEL;
-    let res: Response;
+    // The client reads connection settings from storage; only the model
+    // override is passed so the request matches what the user just saved.
+    const streamOpts = {
+      messages: chatHistory as LlmMessage[],
+      config: { model: settings.model || DEFAULT_MODEL },
+      handlers: {
+        onFirstToken() {
+          gotFirstToken = true;
+          // Clear the "Thinking..." once the first token arrives.
+          setChatStatus(null);
+        },
+        onDelta(accumulated: string) {
+          // Re-render up to the cursor. Partial markdown (e.g. "**bo" mid-stream)
+          // shows literally until its closing marker arrives — acceptable.
+          assistantBody.innerHTML = renderMarkdown(accumulated);
+          assistantBody.appendChild(cursorElement);
+          chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+        }
+      }
+    };
+
     try {
-      res = await requestChatCompletion(settings, model);
+      streamed = await completeStream(streamOpts);
     } catch (err) {
       // Vision support is not advertised consistently by compatible providers.
       // If the provider rejects image content, retry once with the image bytes
@@ -374,23 +338,8 @@ async function sendChat(): Promise<void> {
       const lastMessage = chatHistory[chatHistory.length - 1];
       if (lastMessage?.role === "user") lastMessage.content = fallbackContent;
       setChatStatus("Image input was rejected; retrying without images...", true);
-      res = await requestChatCompletion(settings, model);
+      streamed = await completeStream(streamOpts);
     }
-
-    streamed = await readSseStream(res.body!, {
-      onFirstToken() {
-        gotFirstToken = true;
-        // Clear the "Thinking..." once the first token arrives.
-        setChatStatus(null);
-      },
-      onDelta(accumulated) {
-        // Re-render up to the cursor. Partial markdown (e.g. "**bo" mid-stream)
-        // shows literally until its closing marker arrives — acceptable.
-        assistantBody.innerHTML = renderMarkdown(accumulated);
-        assistantBody.appendChild(cursorElement);
-        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-      }
-    });
 
     cursorElement.remove();
     const reply = streamed.trim() || "(no response)";

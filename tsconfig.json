@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": ["chrome"]
   },
-  "include": ["*.ts", "shared/*.ts", "chat/*.ts"]
+  "include": ["*.ts", "shared/*.ts", "chat/*.ts", "llm/**/*.ts"]
 }
