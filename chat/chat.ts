@@ -37,13 +37,9 @@ const chatUploadBtn = $<HTMLButtonElement>("chat-upload-btn");
 const chatFileInput = $<HTMLInputElement>("chat-file-input");
 
 // In-memory conversation only — not persisted. Cleared when panel closes.
-const chatHistory: ChatMessage[] = [
-  {
-    role: "system",
-    content:
-      "You are a helpful, concise assistant. Messages may include a 'Context' section describing the browser tab(s) the user is viewing, often with extracted page content, plus attached text files or images. Use the provided context and attachments to answer questions like 'what is this?' — prefer them over guessing."
-  }
-];
+const SYSTEM_PROMPT =
+  "You are a helpful, concise assistant. Messages may include a 'Context' section describing the browser tab(s) the user is viewing, often with extracted page content, plus attached text files or images. Use the provided context and attachments to answer questions like 'what is this?' — prefer them over guessing.";
+const chatHistory: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
 let chatBusy = false;
 let attachmentBusy = false;
 
@@ -118,6 +114,34 @@ export function flashChatStatus(text: string, ms = 3000): void {
     // Only clear if nothing else took over the status line meanwhile.
     if (chatStatusEl.textContent === text) setChatStatus(null);
   }, ms);
+}
+
+const CHAT_EMPTY_TEXT =
+  "Start chatting with the AI. Messages are kept in memory only — closing the panel clears them.";
+
+/**
+ * Start a fresh conversation: wipe the transcript and history, restore the
+ * empty state, and show the chat panel. Pinned tabs and pending attachments
+ * stay — they are user-chosen context for the next message, not part of the
+ * conversation. Blocked while a reply is streaming or files are being read.
+ */
+export function resetChat(): void {
+  if (chatBusy || attachmentBusy) {
+    flashChatStatus("Wait for the current reply to finish before starting a new chat.");
+    return;
+  }
+  chatHistory.length = 0;
+  chatHistory.push({ role: "system", content: SYSTEM_PROMPT });
+  chatMessagesEl.innerHTML = "";
+  const empty = document.createElement("div");
+  empty.className = "chat-empty";
+  empty.textContent = CHAT_EMPTY_TEXT;
+  chatMessagesEl.appendChild(empty);
+  chatInputEl.value = "";
+  chatInputEl.style.height = "";
+  setChatStatus(null);
+  switchTab("chat");
+  chatInputEl.focus();
 }
 
 /** Format one target tab as LLM context, with page content when scraping succeeded. */
@@ -392,6 +416,8 @@ async function sendChat(): Promise<void> {
 }
 
 export function initChat(): void {
+  document.getElementById("nav-new-chat-btn")?.addEventListener("click", resetChat);
+
   chatSendBtn.addEventListener("click", sendChat);
 
   chatUploadBtn.addEventListener("click", () => {
