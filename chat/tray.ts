@@ -19,6 +19,9 @@ const removedContextIds = new Set<number>();
 let contextMenuOpen = false;
 let allContextTabs: TabDescriptor[] = [];
 let currentTabId: number | undefined;
+// The tab auto-attached as "current tab" context (vs. pins the user picked
+// from the menu). Tracked so switching tabs swaps it instead of piling up pins.
+let autoPinnedId: number | undefined;
 
 // Injected by initContextTray so the tray can hand focus back to the composer.
 let focusComposer: () => void = () => {};
@@ -170,6 +173,37 @@ function renderContextList(tabs: TabDescriptor[], currentId?: number): void {
   }
 }
 
+/**
+ * Auto-attach the active tab as context. Runs on tray init and whenever the
+ * active tab changes so the current tab is always in the tray — not just
+ * when the user opens the picker menu. When the active tab changes, the
+ * previously auto-attached pin is swapped out (user-picked pins stay);
+ * tabs the user explicitly unpinned are never re-attached.
+ */
+async function autoPinActiveTab(): Promise<void> {
+  const [active] = await chrome.tabs
+    .query({ active: true, currentWindow: true })
+    .catch(() => [] as chrome.tabs.Tab[]);
+  const fresh = active ? normalizeTab(active) : null;
+  if (!fresh || fresh.id == null) return;
+  currentTabId = fresh.id;
+
+  // Swap out the previous auto-attached pin so the tray follows the active
+  // tab instead of accumulating one pin per visited tab.
+  if (autoPinnedId != null && autoPinnedId !== fresh.id) {
+    const i = pinnedContext.findIndex((p) => p.id === autoPinnedId);
+    if (i !== -1) pinnedContext.splice(i, 1);
+    autoPinnedId = undefined;
+    renderContextTray();
+  }
+
+  if (isPinned(fresh.id) || removedContextIds.has(fresh.id)) return;
+
+  pinnedContext.push(fresh);
+  autoPinnedId = fresh.id;
+  renderContextTray();
+}
+
 async function openContextMenu(): Promise<void> {
   contextMenuOpen = true;
   chatContextMenu.classList.remove("hidden");
@@ -191,8 +225,11 @@ async function openContextMenu(): Promise<void> {
   }
   // Auto-pin the active tab so it's ready to send as context —
   // unless the user already unpinned it (don't re-attach it).
+  // Normally already pinned by autoPinActiveTab; this is a fallback for
+  // cases where activation events were missed (e.g. popup just opened).
   if (currentTab && !isPinned(currentTab.id) && !removedContextIds.has(currentTab.id)) {
     pinnedContext.push(currentTab);
+    autoPinnedId = currentTab.id;
     renderContextTray();
   }
   renderContextList(allContextTabs, currentTabId);
@@ -257,6 +294,14 @@ export function initContextTray(onFocusComposer: () => void): void {
   chrome.tabs.onRemoved.addListener((tabId) => {
     if (!isPinned(tabId)) return;
     void refreshPinnedTabs();
+  });
+
+  // Auto-attach the current tab right away, and re-attach whenever the user
+  // switches tabs — the tray should always show the active tab as context,
+  // even if the picker menu was never opened.
+  void autoPinActiveTab();
+  chrome.tabs.onActivated.addListener(() => {
+    void autoPinActiveTab();
   });
 
   chatContextBtn.addEventListener("click", async (e) => {
